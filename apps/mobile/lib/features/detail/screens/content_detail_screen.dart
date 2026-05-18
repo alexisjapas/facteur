@@ -1651,73 +1651,6 @@ class _ContentDetailScreenState extends ConsumerState<ContentDetailScreen>
                   );
                 },
               ),
-            // Floating "Lancer l'analyse Facteur" button — in-app articles only.
-            // Visible when the perspectives section is expanded and analysis
-            // hasn't been triggered yet.
-            if (useInAppReading && content.contentType == ContentType.article)
-              Builder(
-                builder: (context) {
-                  final show = _perspectivesExpanded &&
-                      _perspectivesAnalysisState ==
-                          PerspectivesAnalysisState.idle &&
-                      _perspectivesResponse != null &&
-                      _perspectivesResponse!.perspectives.isNotEmpty;
-                  return Positioned(
-                    right: 16,
-                    bottom: _kFooterContentHeight +
-                        MediaQuery.of(context).viewPadding.bottom +
-                        12,
-                    child: AnimatedScale(
-                      scale: show ? 1.0 : 0.9,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      child: AnimatedOpacity(
-                        opacity: show ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 200),
-                        child: IgnorePointer(
-                          ignoring: !show,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: context.facteurColors.surfaceElevated
-                                  .withValues(alpha: 0.95),
-                              border: Border.all(
-                                color: context.facteurColors.border,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.08),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                HapticFeedback.lightImpact();
-                                _requestPerspectivesAnalysis();
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: context.facteurColors.primary,
-                                side: BorderSide.none,
-                                backgroundColor: Colors.transparent,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              icon: Icon(
-                                PhosphorIcons.sparkle(PhosphorIconsStyle.fill),
-                                size: 16,
-                              ),
-                              label: const Text('Lancer l\'analyse Facteur'),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
             // Footer — always rendered, mirrors header slide behavior.
             // Article: full layout. Video/audio: external CTA + bookmark + sunflower.
             Positioned(
@@ -2893,6 +2826,8 @@ class _ContentDetailScreenState extends ConsumerState<ContentDetailScreen>
                                     sourceDomain: p.sourceDomain,
                                     biasStance: p.biasStance,
                                     publishedAt: p.publishedAt,
+                                    highlightSpans: p.highlightSpans,
+                                    sharedTokens: p.sharedTokens,
                                   ),
                                 )
                                 .toList(),
@@ -2918,6 +2853,9 @@ class _ContentDetailScreenState extends ConsumerState<ContentDetailScreen>
                             analysisZoneKey: _analysisZoneKey,
                             isExpanded: _perspectivesExpanded,
                             onToggle: _onPerspectivesToggle,
+                            referenceTitle: _content?.title ?? '',
+                            referencePivot:
+                                _perspectivesResponse!.referencePivot,
                           ),
                         ),
                         Container(
@@ -3446,6 +3384,8 @@ class _ContentDetailScreenState extends ConsumerState<ContentDetailScreen>
                             sourceDomain: p.sourceDomain,
                             biasStance: p.biasStance,
                             publishedAt: p.publishedAt,
+                            highlightSpans: p.highlightSpans,
+                            sharedTokens: p.sharedTokens,
                           ),
                         )
                         .toList(),
@@ -3467,6 +3407,8 @@ class _ContentDetailScreenState extends ConsumerState<ContentDetailScreen>
                     analysisZoneKey: _analysisZoneKey,
                     isExpanded: _perspectivesExpanded,
                     onToggle: _onPerspectivesToggle,
+                    referenceTitle: _content?.title ?? '',
+                    referencePivot: _perspectivesResponse!.referencePivot,
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(

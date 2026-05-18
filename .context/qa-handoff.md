@@ -1,4 +1,4 @@
-# QA Handoff — PR finale unifiée : Système d'intérêts 22.1 + Flux Continu 21.1 V1.8/V2.0
+# QA Handoff — Refonte hi-fi Couverture médiatique (Story 7.4 Sprint 2 front)
 
 > Reconvergence des deux workstreams (`22.1.x-backend-interests` + `flux-continu-v18-refonte` + WIP V10) sur la branche `22.1.1-backend-interests`. UNE PR vers `main`.
 
@@ -9,187 +9,17 @@ Deux features shippées ensemble :
 1. **Système d'intérêts 4-états unifié + favoris + backfill (Story 22.1)** — Backend (migration + endpoints + services), mobile screens, sync mobile one-shot.
 2. **Flux Continu V1.8 + finitions V2.0 (Story 21.1)** — Home Flux Continu, hero Explorer, sticky bascule tab bar ↔ filter bar, fold différé entre sessions.
 
-Les deux features sont **indépendantes au runtime** mais le WIP V10 du Flux Continu **consomme** la table `user_favorite_interests` peuplée par la migration 22.1. C'est la raison principale du ship groupé.
+Refonte hi-fi du panneau « Couverture médiatique » sur l'écran article (front) :
+- Bandeau `cm-panel-inline` (hairlines, spectrum 5-segs, "N médias", caret)
+- Carte dépliée : bloc référence (wash verbe-pivot gris), 8 lignes variantes avec **diff lexical animé en cascade** (Mode 3 fidèle : shared en tertiary, key en wash bias)
+- CTA Analyse Facteur en card dashed déprioritée
+- Nouveau badge polarisation (3 niveaux) dans la meta-row des `FeedCard` des articles topicalisés du digest L'Essentiel
+
+L'animation cascade des surlignages se déclenche **1×** à l'ouverture de la carte dépliée. Feeling visé : « Facteur analyse en temps réel les divergences entre sources ».
 
 ## PR associée
 
-À créer via `/go` après ce QA. Cible : `--base main`. Remplace de facto PR #614 (à fermer ou rebaser après merge).
-
----
-
-# A. Système d'intérêts 22.1 — détail
-
-## Feature développée
-
-Refonte du système d'intérêts mobile autour d'un modèle 4-états unique (`hidden` / `unfollowed` / `followed` / `favorite`) appliqué à Thèmes, Sujets et Sources. Cap dur de 3 favoris (séparé entre intérêts et sources). Ordre canonique éditable par drag. Le slider 1→3 (`TopicPrioritySlider`) et la SharedPreferences `theme_priority_*` disparaissent. Un seul provider `userInterestsProvider` alimente l'écran « Mes intérêts », la sheet filtre du feed et les onglets favoris du feed.
-
-## Écrans impactés (22.1)
-
-| Écran | Route | Modifié / Nouveau |
-|-------|-------|-------------------|
-| Mes intérêts | `/settings/interests` | **Nouveau** (déplacé de `features/custom_topics/` → `features/my_interests/`, refondu) |
-| Mes sources | `/settings/sources` | **Modifié** (section Favoris ajoutée en haut + icône étoile par source) |
-| Sheet « Filtrer parmi vos intérêts » | depuis le feed, bouton filtre | **Modifié** (« VOS FAVORIS » lit `userInterestsProvider.favorites`) |
-| Onglets favoris du feed | top du Feed | **Modifié** (consume `userInterestsProvider.favorites` au lieu des SharedPrefs) |
-| TopicExplorer / ArticleSheet | `/topic-explorer` + sheet | Inchangés visuellement (juste `TopicPrioritySlider` → `PrioritySlider` direct) |
-
-## Scénarios de test (22.1)
-
-### Scénario 1 : 0 favori — état initial
-**Parcours** :
-1. Compte vierge → ouvrir `/settings/interests`.
-2. Observer la section « Favoris (0/3) » en haut.
-
-**Résultat attendu** : section présente avec hint « Aucun favori — étoile un Thème ou un Sujet pour le retrouver ici. ».
-
-### Scénario 2 : Promotion Thème → Favori
-**Parcours** :
-1. Sur l'écran Mes intérêts, identifier le bloc « 💻 Technologie ».
-2. Tap sur le chip d'état à droite du titre (Neutre/Suivi/Masqué) → bottom sheet picker.
-3. Tap sur « Favori ».
-
-**Résultat attendu** :
-- Le picker se ferme.
-- Tech apparaît en section Favoris (position 0).
-- Compteur passe à « Favoris (1/3) ».
-- Persistance : revenir sur l'écran → toujours présent.
-
-### Scénario 3 : Cap atteint
-**Parcours** :
-1. Atteindre 3 favoris (3 Thèmes ou mélange).
-2. Tap sur le chip d'un 4ᵉ Thème → picker.
-
-**Résultat attendu** :
-- L'option « Favori » est grisée + texte « Limite atteinte (3) — retirez-en un d'abord ».
-- Si l'utilisateur insiste (tap quand même), aucun état n'est muté, snackbar « Tu as déjà 3 favoris. Retire-en un d'abord. ».
-
-### Scénario 4 : Drag-reorder
-**Parcours** :
-1. Avoir ≥ 2 favoris.
-2. Drag-handle (icône `dotsSixVertical`) à droite d'un favori → déplacer position 0 → 2.
-3. Fermer puis rouvrir l'écran.
-
-**Résultat attendu** : nouvel ordre persisté côté backend (`POST /api/user/interests/reorder` dans la Network tab).
-
-### Scénario 5 : Masquer un Thème ou Sujet
-**Parcours** :
-1. Chip d'état → picker → « Masquer ».
-
-**Résultat attendu** :
-- L'item disparaît de la section principale.
-- Apparaît dans l'ExpansionTile « Masqués (n) » en bas (replié par défaut, ouvrir pour vérifier).
-- Tap sur « Modifier » → repicker → « Suivi » → l'item revient en section principale.
-
-### Scénario 6 : Sources symétrique
-**Parcours** : refaire 1-5 sur `/settings/sources`.
-- Section Favoris en haut (vide → hint « Aucune source favorite — étoile une source… »).
-- Tap sur l'icône étoile à droite de n'importe quelle source → picker → Favori.
-- Cap = 3 (séparé du cap intérêts).
-- Drag-reorder fonctionnel.
-
-### Scénario 7 : Sheet feed reconnectée
-**Parcours** :
-1. Ouvrir le Feed → tap sur le bouton « Filtrer » (icône funnel) → sheet `interest_filter_sheet`.
-2. Section « VOS FAVORIS ».
-
-**Résultat attendu** :
-- Affiche EXACTEMENT les favoris (Thèmes + Sujets confondus) dans l'ordre canonique du provider (drag user-controlled), pas la dérivation legacy `priorityMultiplier >= 2.0`.
-- Si 0 favori → message « Définir mes thèmes favoris » avec CTA vers `/settings/interests`.
-
-### Scénario 8a : Backfill legacy — compte avec slider Thème à 3/3 + Sujet à priority 2.0
-
-> Validable via Supabase SQL editor avant/après MeP, ou en local via `make db-reset && alembic upgrade head`.
-
-**Parcours** :
-1. État pré-MeP : user a 1 `user_topic_profiles.priority_multiplier = 2.0` et 1 `user_interests.weight = 2.5` sur slug `culture`.
-2. Lancer la migration `22a1_interest_state_favorites`.
-3. Ouvrir l'app → écran « Mes intérêts ».
-
-**Résultat attendu** :
-- `user_favorite_interests` contient 2 lignes pour ce user (pos 0 = Sujet, pos 1 = culture).
-- L'écran affiche « Favoris (2/3) » avec le Sujet en haut, culture en dessous.
-- `state='favorite'` sur le Sujet et sur la row culture de `user_interests`.
-
-### Scénario 8b : Backfill — compte vierge sans aucun signal
-
-**Parcours** :
-1. User existant `user_profiles` sans aucune row `user_interests` ni `user_topic_profiles`.
-2. Lancer la migration.
-
-**Résultat attendu** :
-- 2 favoris automatiquement créés (positions 0 = tech, 1 = science) — premiers slugs de `CANONICAL_THEME_SLUGS`.
-- 2 rows `user_interests` créées à `weight=0.5, state='favorite'`.
-- Slot 3 reste libre pour un favori user ou pour le sync mobile.
-
-### Scénario 8c : Backfill — cap respecté à 3
-
-**Parcours** :
-1. User avec 5 Sujets à `priority_multiplier=2.0`.
-2. Lancer la migration.
-
-**Résultat attendu** :
-- Exactement 3 favoris en table (`COUNT(*) FROM user_favorite_interests WHERE user_id = X` = 3).
-- Aucune erreur Postgres (`CHECK position BETWEEN 0 AND 2` respecté).
-- Les 2 Sujets non promus restent en `state='followed'` (ou `'hidden'` si `priority=0.2`).
-
-### Scénario 8d : Sync mobile post-MeP — purge SharedPrefs
-
-**Parcours** :
-1. Pré-MeP : SharedPrefs mobile contiennent `theme_priority_Technologie=2.0`, `theme_priority_Sport=3.0`, `theme_priority_Économie=1.0`.
-2. MeP backend.
-3. Lancer l'app mobile (peu importe l'écran ouvert ; auth requise).
-4. Observer Network tab.
-
-**Résultat attendu** :
-- 2 `PATCH /api/user/interests` envoyés (tech, sport — pas economy car < 2.0).
-- Réponse 200 sur les 2 (ou 422 silencieux si cap déjà atteint par le backfill).
-- `theme_priority_*` purgées des SharedPrefs (vérifiable via DevTools).
-- Flag `interests_v2_legacy_synced=true` écrit.
-- Au 2e lancement : aucun call réseau pour cette feature (idempotence).
-
-### Scénario 9 : Mode Serein préservé
-**Parcours** :
-1. Toggle Mode Serein ON.
-2. Section Favoris cachée (par design — Serein gère un axe orthogonal).
-3. Checkbox par sujet → toggle `excludedFromSerein` via `customTopicsProvider`.
-
-**Résultat attendu** : les chips 4-états restent visibles uniquement en mode normal ; en mode Serein la checkbox classique persiste comme avant.
-
-## Critères d'acceptation (22.1)
-
-- [ ] `rg topic_priority_slider apps/mobile/lib` → 0 résultat
-- [ ] `rg themePriorityProvider apps/mobile/lib` → 0 résultat
-- [ ] Endpoints `/api/user/interests` et `/api/user/sources` consommés (cf. DevTools Network)
-- [ ] 422 `favorite_cap_reached` déclenche le snackbar exactement comme scénario 3
-- [ ] Drag-reorder émet `POST /api/user/interests/reorder`
-- [ ] `flutter test` vert (12+5 nouveaux tests + suite legacy)
-- [ ] `pytest -v tests/alembic/test_interest_state_migration.py` vert (3 existants + 5 backfill)
-- [ ] `flutter analyze` 0 issue actionnable (les `withOpacity` info pré-existants restent)
-- [ ] **Post-MeP** : `SELECT COUNT(*) FROM user_profiles up WHERE NOT EXISTS (SELECT 1 FROM user_favorite_interests ufi WHERE ufi.user_id=up.user_id)` = 0
-- [ ] **Post-MeP** : aucun user n'a > 3 favoris (cap respecté)
-- [ ] **Post-MeP** : `state='favorite'` cohérent sur `user_interests` / `user_topic_profiles` pour chaque row dans `user_favorite_interests`
-
-## Zones de risque (22.1)
-
-1. **Mode Serein** : la nouvelle UI ne re-implémente PAS le tri-state checkbox cascadant theme→topics. En mode Serein, chaque sujet a son propre checkbox indépendant. ⚠️ À tester si acceptable produit.
-
-2. **Suggestions de thèmes** : la suggestion-block existante (« Suggestions de sujets » par macro-thème, depuis `topicSuggestionsProvider`) est supprimée de l'écran refondu. Pour ajouter un sujet, l'utilisateur passe par le FAB « Sujet personnalisé » ou TopicExplorer.
-
-3. **Cohérence avec personalizationProvider** : la mise à state=hidden d'un Thème via le nouveau endpoint ne met PAS à jour `personalizationProvider.mutedThemes` (les deux mécanismes coexistent).
-
-4. **Backend pytest** : à re-tester avant merge avec `supabase start` + `pytest -v tests/routers/test_user_interests.py tests/routers/test_user_sources_state.py`.
-
-## Dépendances (22.1)
-
-- Backend endpoints : `GET/PATCH /api/user/interests`, `POST /api/user/interests/reorder`, `GET/PATCH /api/user/sources`, `POST /api/user/sources/reorder`
-- Migration Alembic `22a1_interest_state_favorites` (tables `user_favorite_interests`, `user_favorite_sources` + enum `interest_state` + colonne `state` sur 3 tables)
-- Aucune dépendance externe ajoutée (`pubspec.yaml` inchangé côté mobile)
-
----
-
-# B. Flux Continu 21.1 V1.8/V2.0 — détail
-
-## ⚠️ Décision UX 2026-05-14 — fold différé entre sessions (V2.0)
+À créer juste après ce handoff (`gh pr create --base main`).
 
 PO Laurin a signalé : « En scroll-down continu, des "sauts" apparaissent toujours en arrivant à la fin d'une section. » Quatre approches in-session ont échoué (trigger naïf, `userScrollDirection`, `correctBy` post-frame, `SliverList` natif) — toutes laissaient un décalage visible parce qu'un resize de sliver dans un `CustomScrollView` impose mécaniquement de réaligner le contenu en dessous.
 
@@ -209,36 +39,10 @@ Six ajustements de la home Flux Continu V1.8 : auto-fold des sections scrollées
 ## Écrans impactés (21.1)
 
 | Écran | Route | Modifié / Nouveau |
-|-------|-------|-------------------|
-| Flux Continu (home) | `/flux-continu` | Modifié |
-| Feed (legacy) | `/feed` | **Non modifié** — vérifier non-régression |
-
-## Scénarios de test (21.1)
-
-### Scénario 1 : Scroll-past sans fold visible (V2.0)
-**Parcours** :
-1. Aller sur `/flux-continu` (cold launch — état initial)
-2. **Scroll-down continu** rapide, puis un autre lent
-3. Observer chaque hero éditorial au moment où il sort par le haut du viewport
-4. Une fois en bas (closing card), scroller vers le haut pour revoir les heros
-
-**Résultat attendu** :
-- **AUCUN saut visuel**, aucun stutter pendant le scroll — il n'y a plus aucun resize en session
-- Chaque hero **reste en taille plein-format** pendant toute la session (pas de fold automatique)
-- En remontant vers le haut, les heros sont toujours expanded — pas de transition
-
-### Scénario 1bis : Fold différé visible au prochain cold launch
-**Parcours** :
-1. Sur `/flux-continu`, scroll-down jusqu'à la closing card (toutes les sections passées au-dessus du viewport)
-2. **Kill l'app** (ou hard refresh sur web)
-3. Relancer / recharger
-4. Observer l'état initial
-
-**Résultat attendu** :
-- Au top du flux, les sections scrollées-past lors de la session précédente apparaissent **directement en `FoldedSectionCard`** (~28 px chacune)
-- La closing card scrollée-past apparaît également dismissée (cachée) si elle a été scrollée past
-- DevTools localStorage : clé `flutter.flux_continu_folded_${YYYY-MM-DD}` contient la liste des sections persistées
-- Tap sur une folded card → ré-expansion locale (session-only)
+|---|---|---|
+| Détail article (bottom layout) | `/feed/:contentId` | Modifié — `PerspectivesInlineSection` refondu |
+| Détail article (top layout) | `/digest/:contentId` | Modifié — idem, 2 call-sites |
+| Digest L'Essentiel | `/digest` | Modifié — `FeedCard` accepte `divergenceLevel` ; câblé via `topic_section.dart` |
 
 ### Scénario 2 : Tap sur folded card = ré-expansion locale
 **Parcours** :
@@ -249,172 +53,141 @@ Six ajustements de la home Flux Continu V1.8 : auto-fold des sections scrollées
 - La carte se ré-expanse en hero complet (banner + cards + Plus de…)
 - Pas de persistance : recharger la page (F5) la laisse foldée à nouveau
 
-### Scénario 3 : Persistance par jour
+### Scénario 1 — Happy path : animation cascade Mode 3
+
 **Parcours** :
-1. Scroll past toutes les sections jusqu'à `flux_continu_folded` peuplé pour le jour
-2. Recharger l'app (F5 / cold reload)
-3. Observer l'état initial
+1. Ouvrir un article du digest L'Essentiel couvert par ≥5 médias avec topic polarisé (idéalement actu politique récente)
+2. Vérifier le bandeau replié sous le titre : `Couverture médiatique` + spectrum 5 segments distincts + `N médias` + caret
+3. Tap sur le bandeau → carte se déplie
 
-**Résultat attendu** :
-- Les sections scrollées avant le reload restent foldées
-- DevTools localStorage : clé `flutter.flux_continu_folded_${YYYY-MM-DD}` contient une liste des noms des sections (`["essentiel", "theme1", ...]`)
+**Résultats attendus** :
+- Bloc référence visible (border-left ocre, titre `Fraunces` 16.5/600). Si verbe-pivot retourné par le back, **wash gris apparaît** sur le verbe ~80 ms après l'ouverture, fade-in 300 ms.
+- 8 lignes variantes apparaissent (border-left 4 px couleur bias). Sur chaque ligne, les **tokens partagés deviennent gris** et les **tokens divergents reçoivent un wash de la couleur du bias** dans une cascade séquentielle ordonnée par position (gauche → droite), 25 ms entre tokens, 220 ms par token (`easeOutCubic`).
+- Toutes les lignes animent **en parallèle** — feeling « scan simultané ».
+- CTA `Analyse Facteur` dashed border en bas, déprioritée.
 
-### Scénario 4 : Hero Explorer
+### Scénario 2 — Tap variant ouvre navigateur externe
+
 **Parcours** :
-1. Aller sur `/flux-continu`, scroller jusqu'après la closing card « FIN DE TOURNÉE »
-2. Observer le 5ᵉ hero « Explorer »
+1. Sur la carte dépliée, tap n'importe quelle ligne variante.
 
-**Résultat attendu** :
-- Banner plein-format, accent brun parchemin `#5D4037`
-- Titre « Explorer », blurb « Tout ce qui est sorti aujourd'hui sur tes sources et tes sujets — à toi de fouiller, à ton rythme. »
-- Illustration `facteur_bike.png` à droite (opacity 0.88, fadée à gauche)
-- Pas d'onglet « Explorer » dans le sticky tab bar
+**Résultat attendu** : le navigateur in-app/externe s'ouvre sur l'URL du variant. Pas de crash. Le panel reste ouvert au retour.
 
-### Scénario 5 : Bascule sticky tab bar ↔ filter bar
+### Scénario 3 — Tap CTA Analyse Facteur
+
 **Parcours** :
-1. Sur `/flux-continu`, scroll progressif depuis le haut
-2. Observer le sticky en haut au passage de chaque zone
+1. Tap sur "Lancer →" dans la card CTA dashed.
 
-**Résultat attendu** :
-- En zone éditoriale (4 heros) : `StickyTabBar` visible avec 4 onglets + progress fill multi-stop
-- Au moment où le hero Explorer atteint le top : cross-fade 120 ms vers `FeedFilterBar` (chips source + chips thème + bouton recherche)
-- Aucune secousse, pas de blink, pas de bar qui disparaît
-- Le backdrop parchemin reste cohérent (même teinte + blur)
+**Résultat attendu** : le CTA disparaît, remplacé par `PerspectivesAnalysisZone` (skeleton 3 lignes → résultat Markdown). UI inchangée vs. avant la refonte (mêmes états loading/done/error).
 
-### Scénario 6 : Bonnes Nouvelles en dernière position
+### Scénario 4 — Mode 2 dégradé (back pas encore déployé)
+
 **Parcours** :
-1. Toggle serein OFF (état non-serein, par défaut)
-2. Observer l'ordre des sections : Essentiel → Theme1 → Theme2 → **Bonnes Nouvelles**
-3. Vérifier ordre des onglets dans `StickyTabBar` (même ordre)
-4. Toggle serein ON
-5. Observer l'ordre : **Bonnes Nouvelles** → Theme1 → Theme2 → Essentiel
+1. Si le back ne renvoie pas `shared_tokens` (ancien déploiement), ouvrir un article avec perspectives.
 
-**Résultat attendu** : ordre cohérent dans les sections **et** dans les tabs sticky.
+**Résultat attendu** : la carte se déplie. Les variants rendent leur titre avec les `highlight_spans` en wash bias, et le reste en `text_tertiary` (mode 2 fallback automatique, pas de crash). Cascade animée toujours active.
 
-### Scénario 7 : Refinements visuels heros
+### Scénario 5 — Replier → re-ouvrir relance la cascade
+
 **Parcours** :
-1. Aller sur `/flux-continu`
-2. Comparer chaque hero (Essentiel, Bonnes, Theme1, Theme2) à la version précédente
+1. Carte dépliée avec animation jouée.
+2. Tap bandeau → carte se replie.
+3. Tap bandeau → carte se déplie de nouveau.
 
-**Résultat attendu** :
-- Texte titre/blurb un peu plus large (factor 0.64 vs 0.58)
-- Illustration plus petite (120 px vs 136 px) et plus discrète (opacity 0.88)
-- Fade gauche plus net (stop 0.62 vs 0.55) — l'illustration sent moins « centrale »
+**Résultat attendu** : nouvelle cascade jouée intégralement (animation 1× par expand). Pas de "snap" instantané.
 
-### Scénario 8 : Non-régression FeedScreen
+### Scénario 6 — Article hors digest (live path) sans cluster
+
 **Parcours** :
-1. Aller sur `/feed`
-2. Vérifier filter bar complète (search + chips + FavoriteTopicTabs)
-3. Sélectionner un thème, taper une recherche
+1. Ouvrir un article live (non-digest) qui n'a pas de cluster ou pour lequel le back ne peut pas calculer les annotations.
 
-**Résultat attendu** : comportement identique à avant — la filter bar legacy n'a pas été touchée.
+**Résultats attendus** :
+- `highlightSpans` et `sharedTokens` vides sur les variants → DiffTitle rend le titre plein en `text_primary` (pas de wash).
+- `referencePivot` null → bloc référence rendu sans wash.
+- Aucune erreur console.
 
-### Scénario 9 : Couplage Flux Continu ↔ favoris (finalisé)
+> **Regression Bug Couverture (2026-05-18)** : avant fix, ce scénario rendait *tous* les titres en `text_tertiary` (gris pâle uniforme) au lieu de `text_primary`. Couvert par `diff_title_test.dart:122` qui asserte maintenant explicitement la couleur du chunk plain. Cf. `docs/bugs/bug-couverture-mediatique-surlignages.md`.
 
-> Refacto post-WIP V10 : `SectionKind` est string-keyed (`essentiel` / `bonnes` /
-> `theme:<slug>` / `topic:<uuid>`), cap = 3 favoris, le provider écoute
-> `userInterestsProvider` et ne refetch que les sections thèmes au reorder.
+### Scénario 8 — Bandeau cm-panel-inline en viewport étroit (390px)
 
-**9a — 0 favori (compte vierge sans backfill)**
-1. SQL : vider `user_favorite_interests` pour le user de test.
-2. Cold launch `/flux-continu`.
-
-**Résultat attendu** :
-- Sections : `[Essentiel, theme:tech, theme:environment, theme:science, Bonnes]`
-  (3 thèmes canoniques de fallback, hors-backfill).
-- `MyInterestsIntro` affiche « TES 3 THÈMES FAVORIS » + bouton GÉRER.
-
-**9b — 1 favori « Tech »**
-1. SQL : 1 row dans `user_favorite_interests` (interest_slug='tech', position=0).
-2. Cold launch `/flux-continu`.
+**Parcours** :
+1. Ouvrir un article avec perspectives en viewport iPhone (390×844).
+2. Vérifier le bandeau replié : titre + spectrum + count + caret tous visibles sans clipping ni warning console `RenderFlex overflowed`.
 
 **Résultat attendu** :
-- Sections : `[Essentiel, MyInterestsIntro("TON THÈME FAVORI"), theme:tech, Bonnes]`.
-- Une seule section thème.
+- Aucun overflow Flutter dans la console.
+- `CoverageSpectrumBar` 5-segs visible entre le titre et le count.
+- Si le titre « Couverture médiatique » est trop long (ne devrait pas arriver, mais théoriquement), il s'ellipsis au lieu de pousser le spectrum hors écran.
 
-**9c — 3 favoris**
-1. SQL : 3 rows dans `user_favorite_interests` (ex. tech / culture / climat).
-2. Cold launch `/flux-continu`.
+> **Regression Bug Couverture (2026-05-18)** : avant fix, le `Row` du bandeau débordait de 131 px sur 390 px, repoussant le spectrum hors écran. Couvert par `perspectives_inline_overflow_test.dart` qui pump le bandeau en viewport contraint et vérifie l'absence d'exception. Cf. `docs/bugs/bug-couverture-mediatique-surlignages.md`.
 
-**Résultat attendu** :
-- 3 sections thème consécutives dans l'ordre canonique du provider.
-- Intro : « TES 3 THÈMES FAVORIS ».
+### Scénario 7 — Badge polarisation digest
 
-**9d — 1 favori Sujet (custom topic)**
-1. SQL : 1 row dans `user_favorite_interests` (custom_topic_id=<uuid d'un sujet user>).
-2. Cold launch `/flux-continu`.
+**Parcours** :
+1. Aller sur le digest L'Essentiel du jour.
+2. Vérifier la meta-row de chaque article topicalisé.
 
-**Résultat attendu** :
-- Une section thème dont le titre est le `topic_name` du sujet
-  (ex. « IA & éducation »).
-- Network : appel `GET /api/feed?topic=<uuid>&...` (PAS `theme=`).
-- La section contient au moins 1 article filtré sur le slug_parent du sujet.
+**Résultats attendus** :
+- Sujets `divergenceLevel='high'` → badge `POLARISÉ` (glyphe 2 paires brique+marine, label noir bold)
+- Sujets `divergenceLevel='medium'` → badge `AVIS VARIÉS` (5 dots étalés gris, label tertiary)
+- Sujets `divergenceLevel='low'` → badge `CONSENSUS` (3 dots groupés gris, label tertiary)
+- Articles Pépite, Coup de cœur, actu_decalee → **aucun badge** (silence, conforme au hand-off)
 
-**9e — Reorder de favoris depuis MyInterestsScreen → flux continu refetch
-sans tout réinitialiser**
-1. État initial 3 favoris [tech, culture, climat]. Flux continu visible.
-2. Sans quitter l'écran flux continu, ouvrir la sheet `MyInterestsSheet`,
-   puis taper « Gérer mes intérêts » → push MyInterestsScreen.
-3. Drag-reorder en [culture, tech, climat]. Pop retour flux continu.
+### Scénario 9 — Refinements post-merge (2026-05-18)
 
-**Résultat attendu** :
-- Network : 3 appels `GET /api/feed?theme=<slug>` rejoués (un par favori),
-  AUCUN appel `getBothDigests` ni `GET /api/feed?page=1&limit=20` (feed continu)
-  → c'est le path `_refetchThemesOnly`.
-- Les sections apparaissent dans le nouvel ordre [culture, tech, climat]
-  sans réinitialisation du digest ni du feed continu.
+**R1 — Un seul CTA Analyse Facteur**
 
-**9f — SharedPreferences au format string-key**
-1. Scroll past quelques sections.
-2. DevTools → Application → Local Storage.
+**Parcours** :
+1. Ouvrir un article in-app du digest L'Essentiel.
+2. Déplier `Couverture médiatique`.
 
-**Résultat attendu** :
-- Clé `flutter.flux_continu_folded_<YYYY-MM-DD>` contient des entries
-  format `["essentiel", "theme:tech", "topic:abc-uuid", "bonnes"]`.
-- AUCUNE entrée `theme1` ou `theme2`.
+**Résultat attendu** : le bouton flottant « Lancer l'analyse Facteur » en bas-droit a disparu. Seul reste le **CTA dashed** en bas du bloc déplié, qui déclenche correctement l'analyse.
 
-**9g — Tolérance aux clés legacy au cold launch**
-1. Injecter manuellement dans localStorage la clé
-   `flutter.flux_continu_folded_<aujourd'hui>` avec valeur
-   `["essentiel", "theme1", "theme2"]`.
-2. Cold launch.
+**R2 — Bandeau compact avec compteur dans le titre**
+
+**Parcours** :
+1. Sur le bandeau replié, observer la composition du Row.
+
+**Résultat attendu** : titre `Couverture médiatique (N)` à gauche, spectrum 5-segs, caret. **Le `Text "N médias"` séparé n'existe plus**. Aucun overflow en 390 px (couvert par `perspectives_inline_overflow_test.dart` mis à jour).
+
+**R3 — L'article courant n'apparaît jamais comme variant**
+
+**Parcours** :
+1. Ouvrir un article du digest dont la couverture inclut au moins 3-4 variants.
+2. Déplier la section, scroller la liste des variants.
+
+**Résultat attendu** : aucune card de variant ne pointe vers l'URL de l'article actuellement lu (pas de doublon avec le bloc `CET ARTICLE`). Le compteur `(N)` reflète la liste filtrée (1 entrée de moins par rapport à avant le fix). Le spectrum reste cohérent avec la liste affichée.
+
+**R4 — Label CET ARTICLE + divider sous bloc + dividers entre variants renforcés**
+
+**Parcours** :
+1. Déplier `Couverture médiatique` sur un article avec cluster.
 
 **Résultat attendu** :
-- Pas de crash, pas d'erreur console.
-- Seule `essentiel` est appliquée (les `theme1`/`theme2` sont silencieusement
-  ignorées). Le purge journalier nettoiera la clé dans <24h.
+- Le label en haut du bloc référence affiche `CET ARTICLE` (et non plus `VOTRE ARTICLE`).
+- Un **divider gris** (alpha 0.18, marges latérales 16 px) sépare clairement le bloc référence du premier variant.
+- Les dividers entre variants sont **légèrement plus visibles** qu'avant (alpha 0.08 vs. 0.05). Pas d'effet agressif, juste un cran de plus.
 
 ## Critères d'acceptation (21.1)
 
-- [ ] Sections **NE se foldent PAS** pendant la session active (V2.0 : fold différé)
-- [ ] Tap sur folded card ré-expanse en local (state-only, non persistée)
-- [ ] Cold launch nouveau jour : sections re-dépliées (clé `flux_continu_folded_<date>` purgée)
-- [ ] Cold launch même jour après scroll-past : sections apparaissent déjà foldées
-- [ ] Hero « Explorer » inséré entre closing et feed continu avec illustration bike
-- [ ] Sticky cross-fade entre tab bar et filter bar au passage d'Explorer
-- [ ] Mode non-serein : ordre `[Essentiel, themes…, Bonnes]` (0..3 sections thème)
-- [ ] Mode serein : ordre `[Bonnes, themes…, Essentiel]`
-- [ ] Refinements banner (text width, illustration size, opacity, fade stops)
-- [ ] `flutter test test/features/flux_continu/` vert (49+ tests)
-- [ ] `flutter analyze` sur fichiers touchés sans erreur
-- [ ] `rg "SectionKind\\.(theme1|theme2)" apps/mobile/` → 0 résultat
-- [ ] FeedScreen `/feed` fonctionne identique à avant
-- [ ] Couplage Flux Continu ↔ favoris : sections lisent `userInterestsProvider.favorites`
-- [ ] Favori Sujet (custom topic) déclenche `GET /api/feed?topic=<uuid>`
-- [ ] Reorder favoris → seuls les `getFeed(theme/topic)` sont rejoués (économie digest + feed continu)
-- [ ] SharedPreferences format string-key (`theme:slug` / `topic:uuid`), tolère silencieusement les clés legacy `theme1`/`theme2`
+- [ ] Bandeau hairlines + spectrum 5-segs distincts + count + caret rendus correctement (replié)
+- [ ] Bloc référence + 8 lignes variantes + CTA dashed (déplié)
+- [ ] Animation cascade des surlignages déclenchée 1× à l'expand, fade-in fluide
+- [ ] Tap variant → navigateur externe, pas de crash
+- [ ] Mode 2 dégradé fonctionne si back n'expose pas `shared_tokens`
+- [ ] Badge polarisation sur articles topicalisés du digest seulement
+- [ ] Zéro régression sur la suite Flutter (`flutter test` 619/619 ou plus selon parent)
 
 ## Zones de risque (21.1)
 
-- **Auto-fold idempotence** : `markScrolledPast` doit être idempotent (ne pas spammer SharedPreferences à chaque tick de scroll). Validé par la garde `if (current.folded[kind] == true) return`.
-- **Sticky bascule** : si le user scroll vite, l'`AnimatedSwitcher` doit cross-fader proprement.
-- **Filter bar dans FluxContinu** : `FeedFilterBar` drive `feedProvider` global. Les changements de filtre n'affectent **pas** le `feedContinu` rendu. Limitation connue, à valider en QA.
-- **Persistance SharedPreferences (web)** : sur Flutter web, `SharedPreferences` est backé par `localStorage`. La clé apparaît avec un préfixe `flutter.`.
-- **Couplage sections ↔ favoris** : si l'user a 0 favori (cas edge post-backfill), le provider tombe sur le fallback canonique `[tech, environment, science]` pour garantir une tournée non-vide.
-- **Refacto SectionKind string-keyed** : les maps internes `folded` / `moreOpen` passent de `Map<SectionKind, bool>` à `Map<String, bool>` (clés `essentiel` / `bonnes` / `theme:<slug>` / `topic:<uuid>`). Hydratation tolérante aux anciennes clés `theme1`/`theme2` (ignorées au parse, purgées sous 24h par le purge journalier).
+1. **Timing animation** : la cascade utilise un `Future.delayed(80 ms)` avant de démarrer. Si la frame de l'expand prend > 80 ms (jank initial), l'animation peut paraître saccadée. Tester sur device réel iOS et Android.
+2. **Titres très longs** : `DiffTitle` est en `maxLines: 2 ellipsis`. Un titre avec beaucoup de spans après la troncature pourrait avoir des spans visuellement absents (le wash est attaché à un `WidgetSpan` qui peut wrapper différemment). Vérifier sur titres > 100 caractères.
+3. **GoogleFonts.fraunces / GoogleFonts.courierPrime** : chargement réseau au premier render. Vérifier qu'il n'y a pas de flash de fallback (fontStyle.italic Times New Roman) — sur Android cold start spécifiquement.
+4. **Spectrum bar** : avec une distribution totalement vide `{}` (back KO), tous les segments rendus avec floor=1. C'est lu visuellement comme « répartition uniforme » — confirmer que ce fallback est OK ou s'il faut masquer le spectrum (actuellement pas masqué).
+5. **Polarisé bicolore (brique+marine)** : vérifier le contraste WCAG du label noir bold sur fond carte ; la couleur des dots utilise `biasLeft`/`biasRight` qui peuvent être proches en thème sombre.
 
 ## Dépendances (21.1)
 
-- Backend : aucun changement (`/api/digest/both`, `/api/users/top-themes`, `/api/feed` inchangés au strict). Le WIP V10 lit `user_favorite_interests` via les endpoints 22.1.
-- Asset : `apps/mobile/assets/notifications/facteur_bike.png` + `facteur_veille.png` (présents dans les commits cherry-pickés)
-- Package : `shared_preferences ^2.5.4` (déjà déclaré)
+- **Back** : `GET /contents/{id}/perspectives` doit retourner `highlight_spans` (PR #616, déjà mergée) + `shared_tokens` + `reference_pivot` (PR #618, en review). Tant que PR #618 n'est pas mergée + déployée Railway, le front rend en Mode 2 dégradé (pas de Mode 3 fidèle).
+- **GoogleFonts** : `fraunces` et `courierPrime` (déjà utilisés ailleurs dans l'app, pas de nouvel asset à déclarer).
+- **Aucun changement de DB / migration**.
