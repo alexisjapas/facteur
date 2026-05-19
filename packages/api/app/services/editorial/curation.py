@@ -232,7 +232,7 @@ class CurationService:
         # Cf. bug-essentiel-pipeline.md.
         multi_source = [c for c in available if len(c.source_ids) >= 2]
         pool = multi_source if len(multi_source) >= count else available
-        if pool is not multi_source:
+        if pool is available and multi_source:
             logger.info(
                 "curation.fallback_singletons_allowed",
                 multi_source=len(multi_source),

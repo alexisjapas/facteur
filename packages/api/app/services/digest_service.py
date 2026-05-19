@@ -96,25 +96,27 @@ def _schedule_background_regen(
     # clusters petits + deeps anciens promus en article principal + digest
     # gravé en DB qui bloque la régénération du cron 07:30 via
     # `digest_background_regen_skipped_good_format`. Cf. bug-essentiel-pipeline.md.
-    from app.utils.time import is_before_paris_time, now_paris
+    # Reprend exactement la garde appliquée au startup catchup (main.py:304-317).
+    from app.utils.time import now_paris
     from app.workers.scheduler import (
         DIGEST_CRON_HOUR_PARIS,
         DIGEST_CRON_MINUTE_PARIS,
     )
 
     now = now_paris()
-    if target_date == now.date() and is_before_paris_time(
-        now, DIGEST_CRON_HOUR_PARIS, DIGEST_CRON_MINUTE_PARIS
-    ):
-        logger.info(
-            "digest_background_regen_skipped_too_early",
-            user_id=str(user_id),
-            target_date=str(target_date),
-            is_serene=is_serene,
-            now_paris=now.strftime("%H:%M"),
-            cron_at=f"{DIGEST_CRON_HOUR_PARIS:02d}:{DIGEST_CRON_MINUTE_PARIS:02d}",
-        )
-        return
+    if target_date == now.date():
+        cron_minutes = DIGEST_CRON_HOUR_PARIS * 60 + DIGEST_CRON_MINUTE_PARIS
+        now_minutes = now.hour * 60 + now.minute
+        if now_minutes < cron_minutes:
+            logger.info(
+                "digest_background_regen_skipped_too_early",
+                user_id=str(user_id),
+                target_date=str(target_date),
+                is_serene=is_serene,
+                now_paris=now.strftime("%H:%M"),
+                cron_at=f"{DIGEST_CRON_HOUR_PARIS:02d}:{DIGEST_CRON_MINUTE_PARIS:02d}",
+            )
+            return
 
     key = (user_id, target_date, is_serene)
     now_mono = _time.monotonic()
