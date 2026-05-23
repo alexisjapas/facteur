@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../feed/widgets/feedback_inline.dart';
 import '../models/flux_continu_models.dart';
+import 'essentiel_hi_fi_card.dart';
+import 'essentiel_personalize_sheet.dart';
 import 'flux_continu_article_card.dart';
 import 'folded_section_card.dart';
 import 'plus_de_button.dart';
@@ -78,7 +80,14 @@ class SectionBlock extends StatelessWidget {
     // viewport visually doesn't move. An animated transition here would defeat
     // the compensation by leaving the height in flux when the post-frame
     // callback measures it.
-    return isFolded ? _buildFolded() : _buildExpanded();
+    //
+    // [FeedThemeSection] never folds: it opens a dedicated ThemeSectionScreen
+    // (full-page slide), so the fold UX of digest sections would conflict
+    // with that affordance. Only digest sections (bonnes, "Actus du jour")
+    // and the v3 EssentielSection fold.
+    final bool canFold =
+        section is DigestTopicSection || section is EssentielSection;
+    return (isFolded && canFold) ? _buildFolded() : _buildExpanded();
   }
 
   Widget _buildFolded() {
@@ -86,12 +95,31 @@ class SectionBlock extends StatelessWidget {
       title: section.label,
       articleCount: section.totalCount,
       onTap: onUnfold,
+      showCheck: section is EssentielSection,
     );
   }
 
   Widget _buildExpanded() {
-    final cards = _buildCards();
     final section = this.section;
+    // EssentielSection is a fully self-contained hi-fi card — no banner,
+    // no "Plus de…" overflow.
+    if (section is EssentielSection) {
+      return Builder(
+        builder: (context) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            EssentielHiFiCard(
+              articles: section.articles,
+              onTapArticle: (a) => onTapArticle(a, section),
+              onTapPersonalize: () => EssentielPersonalizeSheet.show(context),
+              onTapSkip: onFold,
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      );
+    }
+    final cards = _buildCards();
     final hiddenCount = section.totalCount - section.coreVisibleCount;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,6 +172,10 @@ class SectionBlock extends StatelessWidget {
   List<Widget> _buildCards() {
     final isEssentiel = section.kind == SectionKind.essentiel;
     switch (section) {
+      case EssentielSection():
+        // _buildExpanded short-circuits to EssentielHiFiCard before reaching
+        // _buildCards, so this branch is unreachable in practice.
+        return const [];
       case DigestTopicSection(:final topics, :final coreVisibleCount):
         final visible =
             isOpen ? topics : topics.take(coreVisibleCount).toList();
