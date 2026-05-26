@@ -29,6 +29,7 @@ Pipeline :
 Fallback sans préférences : le scorer dégénère en `actu_boost + perspective − rank`.
 """
 
+import logging
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -209,9 +210,7 @@ def _is_allowed_for_essentiel(article: DigestTopicArticle) -> bool:
         return False
     if (article.source.type or "").lower() in _EXCLUDED_SOURCE_TYPES:
         return False
-    if is_news_bulletin_title(article.title):
-        return False
-    return True
+    return not is_news_bulletin_title(article.title)
 
 
 def _filter_articles_allowed(topics: list[DigestTopic]) -> list[DigestTopic]:
@@ -373,6 +372,21 @@ def _pick_transversal_articles(
     # Story 9.4 : exclure podcasts/youtube/reddit/bulletins en tête de pipeline
     # — ces contenus ne reflètent pas l'actualité chaude traitée par la presse.
     topics = _filter_articles_allowed(topics)
+
+    # Cohérence Essentiel ⊆ Tournée du jour (24h + sources suivies).
+    # Fallback : si le filtre vide tout le pool, on garde le pré-filtre pour
+    # éviter une carte Essentiel vide ; on log une WARNING pour traçage.
+    pre_filter_topics = topics
+    topics = _filter_articles_by_tournee_pool(topics, ctx)
+    if not any(t.articles for t in topics):
+        if ctx.followed_source_ids:
+            logger.warning(
+                "tournee-pool filter emptied the pool — falling back to pre-filter "
+                "topics (user has %d followed sources)",
+                len(ctx.followed_source_ids),
+            )
+        topics = pre_filter_topics
+
     eligible_topics = [t for t in topics if t.articles]
     if not eligible_topics:
         return []
